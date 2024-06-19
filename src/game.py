@@ -5,14 +5,20 @@ import datetime as dt
 import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
+from typing import TypeAlias, cast
 
 import glm
 import moderngl as mgl
 import numpy as np
 import pygame as pg
-from moderngl import Context
+from glm import mat4, vec3
+from moderngl import Buffer, Context, VertexArray
 
 from .math import ndc_to_screenspace, screenspace_to_ndc
+
+GRID_POSITION: TypeAlias = tuple[int, int]
+SCREEN_POSITION: TypeAlias = tuple[int, int]
+GAME_POSITION: TypeAlias = tuple[int, int]
 
 
 class MoveDirection(Enum):
@@ -36,7 +42,7 @@ class GraphicsEngine:
 
         pg.init()
 
-        self.grid_size = 8
+        self.grid_size: int = 8
 
         pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 3)
         pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 3)
@@ -45,11 +51,11 @@ class GraphicsEngine:
             pg.GL_CONTEXT_PROFILE_MASK, pg.GL_CONTEXT_PROFILE_CORE
         )
 
-        self.pg_window = pg.display.set_mode(
+        self.pg_window: pg.Surface = pg.display.set_mode(
             self.window_size, flags=pg.OPENGL | pg.DOUBLEBUF
         )
 
-        self.ctx = mgl.create_context()
+        self.ctx: Context = mgl.create_context()
         self.ctx.enable(flags=mgl.DEPTH_TEST | mgl.CULL_FACE)
 
         self.clock = pg.time.Clock()
@@ -71,9 +77,9 @@ class GraphicsEngine:
             dtype=np.float32,
         )
         # fmt: on
-        quad_vbo = self.ctx.buffer(quad_vertices)
+        self.quad_vbo: Buffer = self.ctx.buffer(quad_vertices)
         buffer_format = "2f"
-        attributes = ["in_position"]
+        attributes: list[str] = ["in_position"]
 
         board_vertex_shader = """
         # version 330
@@ -118,19 +124,17 @@ class GraphicsEngine:
             vertex_shader=board_vertex_shader, fragment_shader=board_fragment_shader
         )
 
-        board_m_model = glm.translate(glm.vec3(-0.25, 0.0, 0.0))
-        board_m_model = glm.scale(
-            board_m_model, glm.vec3(1 / self.aspect_ratio, 1.0, 1.0)
-        )
+        board_m_model = glm.translate(vec3(-0.25, 0.0, 0.0))
+        board_m_model = glm.scale(board_m_model, vec3(1 / self.aspect_ratio, 1.0, 1.0))
 
         self.board_shader_program["m_model"].write(board_m_model)
         self.board_shader_program["i_gridsize"] = self.grid_size
 
-        self.board_vao = self.ctx.vertex_array(
-            self.board_shader_program, [(quad_vbo, "2f", "in_position")]
+        self.board_vao: VertexArray = self.ctx.vertex_array(
+            self.board_shader_program, [(self.quad_vbo, "2f", "in_position")]
         )
 
-        player_vertex_shader = """
+        self.quad_vertex_shader = """
         # version 330
 
         layout(location = 0) in vec2 in_position;
@@ -146,7 +150,7 @@ class GraphicsEngine:
         }
         """
 
-        player_fragment_shader = """
+        self.player_fragment_shader = """
         #version 330
 
         const float PI = 3.1415926;
@@ -160,40 +164,101 @@ class GraphicsEngine:
             out_color = vec4(0.5 - 0.3 * abs(sin(f_time * PI * 3)), 0.7, 0.3, 1.0);
         }
         """
-        self.player_shader_program = self.ctx.program(
-            vertex_shader=player_vertex_shader, fragment_shader=player_fragment_shader
+        self.player_head_shader_program = self.ctx.program(
+            vertex_shader=self.quad_vertex_shader,
+            fragment_shader=self.player_fragment_shader,
         )
 
-        # self.player_base_position = glm.vec3(-9.675, 7.0, 0.0)
+        # self.player_base_position = vec3(-9.675, 7.0, 0.0)
 
-        self.player_base_position = glm.vec3(
+        self.player_head_start_position = vec3(
             -1.0 + self.adjust_x / self.grid_size,
             1.0 - self.adjust_y / self.grid_size,
             0.0,
         )
-        self.player_m_model_translate = glm.translate(self.player_base_position)
+        self.player_m_model_translate = glm.translate(self.player_head_start_position)
         self.player_m_model_scale = glm.scale(
-            glm.mat4(), glm.vec3(1.0 / self.aspect_ratio, 1.0, 1.0)
+            mat4(), vec3(1.0 / self.aspect_ratio, 1.0, 1.0)
         )
         self.player_m_model_scale = glm.scale(
             self.player_m_model_scale,
-            glm.vec3(1 / self.grid_size, 1.0 / self.grid_size, 1.0),
+            vec3(1 / self.grid_size, 1.0 / self.grid_size, 1.0),
         )
-        self.player_shader_program["m_model_translate"].write(
+        self.player_head_shader_program["m_model_translate"].write(
             self.player_m_model_translate
         )
-        self.player_shader_program["m_model_scale"].write(self.player_m_model_scale)
-        self.player_shader_program["f_time"] = 0.0
+        self.player_head_shader_program["m_model_scale"].write(
+            self.player_m_model_scale
+        )
+        self.player_head_shader_program["f_time"] = 0.0
 
-        self.player_vao = self.ctx.vertex_array(
-            self.player_shader_program, [(quad_vbo, "2f", "in_position")]
+        self.player_head_vao = self.ctx.vertex_array(
+            self.player_head_shader_program, [(self.quad_vbo, "2f", "in_position")]
         )
 
-        self.player_grid_position = (0, 0)
+        self.player_grid_position: GRID_POSITION = (3, 2)
+
+        self.player_previous_grid_positions: list[GRID_POSITION] = [
+            (0, 3),
+            (0, 2),
+            (1, 2),
+            (2, 2),
+        ]
+
         self.player_move_direction = MoveDirection.RIGHT
         self.previous_move_direction = MoveDirection.RIGHT
 
-        self.time_of_last_move = time.time()
+        self.quad_fragment_shader = """
+        #version 330
+
+        const float PI = 3.1415926;
+
+        in vec2 v_position;
+        out vec4 out_color;
+
+        uniform float f_time;
+
+        void main() {
+            out_color = vec4(0.3, 0.4, 0.15, 1.0);
+        }
+        """
+
+        self.player_body_parts: list[PlayerBodyPart] = [
+            PlayerBodyPart(self) for _ in range(2)
+        ]
+
+        self.time_of_last_move: float = time.time()
+
+        self.game_tick_counter = 0
+
+    def _check_event_keydown_wasd(self, event: pg.event.Event) -> None:
+        new_move_direction = MoveDirection.NONE
+        match event.key:
+            case pg.K_w:
+                if self.previous_move_direction != MoveDirection.DOWN:
+                    new_move_direction = MoveDirection.UP
+            case pg.K_s:
+                if self.previous_move_direction != MoveDirection.UP:
+                    new_move_direction = MoveDirection.DOWN
+            case pg.K_a:
+                if self.previous_move_direction != MoveDirection.RIGHT:
+                    new_move_direction = MoveDirection.LEFT
+            case pg.K_d:
+                if self.previous_move_direction != MoveDirection.LEFT:
+                    new_move_direction = MoveDirection.RIGHT
+            case _:
+                raise RuntimeError("Invalid key pressed")
+
+        if (
+            new_move_direction != MoveDirection.NONE
+            and new_move_direction != self.player_move_direction
+        ):
+            self.player_move_direction = new_move_direction
+            print(f"{self.player_move_direction=},{self.previous_move_direction=}")
+
+    def _check_event_keydown(self, event: pg.event.Event) -> None:
+        if event.key in [pg.K_w, pg.K_s, pg.K_a, pg.K_d]:
+            self._check_event_keydown_wasd(event)
 
     def check_event(self) -> None:
         for event in pg.event.get():
@@ -201,36 +266,15 @@ class GraphicsEngine:
                 case pg.QUIT:
                     self.is_running = False
                 case pg.KEYDOWN:
-                    if event.key in [pg.K_w, pg.K_s, pg.K_a, pg.K_d]:
-                        self.previous_move_direction = self.player_move_direction
-                        new_move_direction = MoveDirection.NONE
-                        match event.key:
-                            case pg.K_w:
-                                if self.previous_move_direction != MoveDirection.DOWN:
-                                    new_move_direction = MoveDirection.UP
-                            case pg.K_s:
-                                if self.previous_move_direction != MoveDirection.UP:
-                                    new_move_direction = MoveDirection.DOWN
-                            case pg.K_a:
-                                if self.previous_move_direction != MoveDirection.RIGHT:
-                                    new_move_direction = MoveDirection.LEFT
-                            case pg.K_d:
-                                if self.previous_move_direction != MoveDirection.LEFT:
-                                    new_move_direction = MoveDirection.RIGHT
-                            case _:
-                                raise RuntimeError("Invalid key pressed")
-
-                        if (
-                            new_move_direction != MoveDirection.NONE
-                            and new_move_direction != self.player_move_direction
-                        ):
-                            self.previous_move_direction = self.player_move_direction
-                            self.player_move_direction = new_move_direction
-                            print(
-                                f"{self.player_move_direction=},{self.previous_move_direction=}"
-                            )
+                    self._check_event_keydown(event)
 
     def update_gamestate(self) -> None:
+        """
+        Ticks for the actual game logic, invoked by the game loop.
+        """
+
+        self.previous_move_direction = self.player_move_direction
+        self.player_previous_grid_positions.append(self.player_grid_position)
         match self.player_move_direction:
             case MoveDirection.UP:
                 self.player_grid_position = (
@@ -272,9 +316,15 @@ class GraphicsEngine:
                 self.player_grid_position[1] % self.grid_size,
             )
 
+        self.player_grid_position = cast(GRID_POSITION, self.player_grid_position)
         print(f"{self.player_grid_position=}")
 
+        self.game_tick_counter += 1
+
     def update(self) -> None:
+        """
+        This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
+        """
         t_curr = time.time()
         if t_curr > self.time_of_last_move + 1.5:
             self.update_gamestate()
@@ -282,24 +332,32 @@ class GraphicsEngine:
             self.time_of_last_move = t_curr
             print("Next move!")
 
-        self.player_m_model_translate = glm.translate(
-            self.player_base_position
-            + (2 / self.grid_size)
-            * glm.vec3(self.adjust_vec * glm.vec2(self.player_grid_position), 0.0)
-            * glm.vec3(1.0, -1.0, 0.0)
-        )
+        for body_parts in self.player_body_parts:
+            body_parts.update()
 
-        self.player_shader_program["m_model_translate"].write(
-            self.player_m_model_translate
+        self.player_body_m_model_translate = glm.translate(
+            self.player_head_start_position
+            + (2 / self.grid_size)
+            * vec3(
+                self.adjust_vec * glm.vec2(self.player_grid_position),
+                0.0,
+            )
+            * vec3(1.0, -1.0, 0.0)
+        )
+        self.player_head_shader_program["m_model_translate"].write(
+            self.player_body_m_model_translate
         )
 
         self.board_shader_program["f_time"] = self.time
-        self.player_shader_program["f_time"] = self.time
+        self.player_head_shader_program["f_time"] = self.time
 
     def render(self) -> None:
         self.ctx.clear(color=(1.0, 0.0, 1.0))
 
-        self.player_vao.render(mgl.TRIANGLE_STRIP)
+        self.player_head_vao.render(mgl.TRIANGLE_STRIP)
+        for body_part in self.player_body_parts:
+            body_part.render()
+
         self.board_vao.render(mgl.TRIANGLE_STRIP)
 
         pg.display.flip()
@@ -316,3 +374,55 @@ class GraphicsEngine:
             self.iteration()
 
             self.clock.tick(60.0)
+
+
+class PlayerBodyPart:
+    _id = 0
+
+    def __init__(self, app: GraphicsEngine):
+        self.app: GraphicsEngine = app
+        self.ctx: Context = self.app.ctx
+        self.program: mgl.Program = self.ctx.program(
+            vertex_shader=self.app.quad_vertex_shader,
+            fragment_shader=self.app.quad_fragment_shader,
+        )
+        self.start_position = vec3(0.0, 0.0, 0.0)
+        self.m_model_translate: mat4 = glm.translate(self.start_position)
+        self.m_model_scale: mat4 = glm.scale(
+            mat4(), vec3(1.0 / self.app.aspect_ratio, 1.0, 1.0)
+        )
+        self.m_model_scale: mat4 = glm.scale(
+            self.m_model_scale,
+            vec3(1 / self.app.grid_size, 1.0 / self.app.grid_size, 1.0),
+        )
+        self.program["m_model_translate"].write(self.m_model_translate)
+        self.program["m_model_scale"].write(self.m_model_scale)
+
+        self.vao: VertexArray = self.ctx.vertex_array(
+            self.program, [(self.app.quad_vbo, "2f", "in_position")]
+        )
+        self.id = PlayerBodyPart._id
+        PlayerBodyPart._id += 1
+
+    def update(self):
+        m_model_translate = glm.translate(
+            self.app.player_head_start_position
+            + (2 / self.app.grid_size)
+            * vec3(
+                self.app.adjust_vec
+                * glm.vec2(self.app.player_previous_grid_positions[-(self.id + 1)]),
+                0.0,
+            )
+            * vec3(1.0, -1.0, 0.0)
+        )
+        self.program["m_model_translate"].write(m_model_translate)
+
+    def render(self):
+        self.vao.render(mgl.TRIANGLE_STRIP)
+
+    def __del__(self):
+        # OpenGL cleanup
+        if self.program is not None:
+            self.program.release()
+        if self.vao is not None:
+            self.vao.release()

@@ -11,8 +11,8 @@
             "title": "Backlog",
             "tasks": [
                 {
-                    "text": "Implement Adding new body parts",
-                    "id": "wqh9e8jvkycwzy24dmjfes4x"
+                    "text": "Game end states:\n* Hitting own body\n* Hitting Border",
+                    "id": "jypezxx2afezwgfs27lnuw1d"
                 },
                 {
                     "text": "Textures for player and pickups.",
@@ -21,10 +21,6 @@
                 {
                     "text": "Music and Sound effects.",
                     "id": "x41k8cqlesba7aovbjzg5fte"
-                },
-                {
-                    "text": "Player input events.",
-                    "id": "p3ip8cg3n5we13uzuzc5cran"
                 },
                 {
                     "text": "Game Tick system independent of frame time.",
@@ -39,7 +35,7 @@
                     "id": "phdkuu53nw3is6i6vo1fwxei"
                 },
                 {
-                    "text": "Pickups that increase player length",
+                    "text": "Implement pickups\n* Random Spawning\n* Disappear on picking up\n* Increase tail lenght",
                     "id": "bsssjf0fwdr7521b9dy6hr74"
                 }
             ],
@@ -70,6 +66,10 @@
                 {
                     "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor now if you hit the borders log that you should have died and loop back around (pos.x % gridsize.x)\n\nSupport multiple grid sizes but can leave the window size constant for now.",
                     "id": "s4cknuzkllse78ft1vbcxdhu"
+                },
+                {
+                    "text": "## Body Parts\nCreate a class for them so you can easily spawn them\n\nTrack all play positions in a list and update the body part positions based on that.\n\nSet the body part positions to be trailing the main body based on that, don't add any collision checks, those will be purely logic based by checking against the list.",
+                    "id": "wqh9e8jvkycwzy24dmjfes4x"
                 }
             ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
@@ -78,5 +78,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718813831464
+    "timestamp": 1718838407864
 }
