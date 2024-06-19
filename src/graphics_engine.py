@@ -1,6 +1,8 @@
 import os
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+import datetime as dt
+import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 
@@ -173,9 +175,11 @@ class GraphicsEngine:
             self.player_shader_program, [(quad_vbo, "2f", "in_position")]
         )
 
-        self.player_grid_position = (0, 0)
-        self.move_direction = MoveDirection.NONE
-        self.previous_move = MoveDirection.NONE
+        self.player_grid_position = (3, 2)
+        self.player_move_direction = MoveDirection.RIGHT
+        self.previous_move_direction = MoveDirection.RIGHT
+
+        self.time_of_last_move = time.time()
 
     def check_event(self) -> None:
         for event in pg.event.get():
@@ -184,46 +188,115 @@ class GraphicsEngine:
                     self.is_running = False
                 case pg.KEYDOWN:
                     if event.key in [pg.K_w, pg.K_s, pg.K_a, pg.K_d]:
+                        self.previous_move_direction = self.player_move_direction
+                        new_move_direction = MoveDirection.NONE
                         match event.key:
                             case pg.K_w:
-                                if self.previous_move != MoveDirection.DOWN:
-                                    self.move_direction = MoveDirection.UP
+                                if self.previous_move_direction != MoveDirection.DOWN:
+                                    new_move_direction = MoveDirection.UP
                             case pg.K_s:
-                                if self.previous_move != MoveDirection.UP:
-                                    self.move_direction = MoveDirection.DOWN
+                                if self.previous_move_direction != MoveDirection.UP:
+                                    new_move_direction = MoveDirection.DOWN
                             case pg.K_a:
-                                if self.previous_move != MoveDirection.RIGHT:
-                                    self.move_direction = MoveDirection.LEFT
+                                if self.previous_move_direction != MoveDirection.RIGHT:
+                                    new_move_direction = MoveDirection.LEFT
                             case pg.K_d:
-                                if self.previous_move != MoveDirection.LEFT:
-                                    self.move_direction = MoveDirection.RIGHT
+                                if self.previous_move_direction != MoveDirection.LEFT:
+                                    new_move_direction = MoveDirection.RIGHT
+                            case _:
+                                raise RuntimeError("Invalid key pressed")
+
+                        if (
+                            new_move_direction != MoveDirection.NONE
+                            and new_move_direction != self.player_move_direction
+                        ):
+                            self.previous_move_direction = self.player_move_direction
+                            self.player_move_direction = new_move_direction
+                            print(
+                                f"{self.player_move_direction=},{self.previous_move_direction=}"
+                            )
 
     def update_gamestate(self):
-        if self.move_direction == MoveDirection.UP:
+        if self.player_move_direction == MoveDirection.UP:
             self.player_grid_position = (
                 self.player_grid_position[0],
                 self.player_grid_position[1] + 1,
             )
-        elif self.move_direction == MoveDirection.DOWN:
+        elif self.player_move_direction == MoveDirection.DOWN:
             self.player_grid_position = (
                 self.player_grid_position[0],
                 self.player_grid_position[1] - 1,
             )
-        elif self.move_direction == MoveDirection.LEFT:
+        elif self.player_move_direction == MoveDirection.LEFT:
             self.player_grid_position = (
                 self.player_grid_position[0] - 1,
                 self.player_grid_position[1],
             )
-        elif self.move_direction == MoveDirection.RIGHT:
+        elif self.player_move_direction == MoveDirection.RIGHT:
             self.player_grid_position = (
                 self.player_grid_position[0] + 1,
                 self.player_grid_position[1],
             )
 
-        self.previous_move: MoveDirection = self.move_direction
+        self.previous_move_direction: MoveDirection = self.player_move_direction
+
+    def update_gamestate(self) -> None:
+        match self.player_move_direction:
+            case MoveDirection.UP:
+                self.player_grid_position = (
+                    self.player_grid_position[0],
+                    self.player_grid_position[1] - 1,
+                )
+            case MoveDirection.DOWN:
+                self.player_grid_position = (
+                    self.player_grid_position[0],
+                    self.player_grid_position[1] + 1,
+                )
+            case MoveDirection.LEFT:
+                self.player_grid_position = (
+                    self.player_grid_position[0] - 1,
+                    self.player_grid_position[1],
+                )
+            case MoveDirection.RIGHT:
+                self.player_grid_position = (
+                    self.player_grid_position[0] + 1,
+                    self.player_grid_position[1],
+                )
+            case MoveDirection.NONE:
+                pass
+
+        if (self.player_grid_position[0] < 0) or (
+            self.player_grid_position[0] >= self.grid_size
+        ):
+            print("You dead!")
+            self.player_grid_position = (
+                self.player_grid_position[0] % self.grid_size,
+                self.player_grid_position[1],
+            )
+        if (self.player_grid_position[1] < 0) or (
+            self.player_grid_position[1] >= self.grid_size
+        ):
+            print("You dead!")
+            self.player_grid_position = (
+                self.player_grid_position[0],
+                self.player_grid_position[1] % self.grid_size,
+            )
 
     def update(self) -> None:
-        print(self.move_direction)
+        t_curr = time.time()
+        if t_curr > self.time_of_last_move + 0.3:
+            self.update_gamestate()
+
+            self.time_of_last_move = t_curr
+            print("Next move!")
+
+        self.player_m_model_translate = glm.translate(
+            glm.vec3(-9.675, 7.0, 0.0)
+            + glm.vec3(
+                2 * self.player_grid_position[0], -2 * self.player_grid_position[1], 0.0
+            )
+        )
+
         self.player_shader_program["m_model_translate"].write(
             self.player_m_model_translate
         )
@@ -240,16 +313,14 @@ class GraphicsEngine:
         pg.display.flip()
 
     def iteration(self) -> None:
-        self.time = pg.time.get_ticks() / 1000.0
+        self.time: float = pg.time.get_ticks() / 1000.0
 
         self.update()
         self.render()
-
-        self.delta_time = self.clock.tick(60.0) / 1000.0
 
     def run(self) -> None:
         while self.is_running:
             self.check_event()
             self.iteration()
 
-            self.frame_counter += 1
+            self.clock.tick(60.0)
