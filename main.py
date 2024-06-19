@@ -1,4 +1,4 @@
-from src.graphics_engine import GraphicsEngine
+from src.game import GraphicsEngine
 
 
 def main():

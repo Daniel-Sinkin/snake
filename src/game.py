@@ -27,6 +27,13 @@ class GraphicsEngine:
     def __init__(self):
         self.window_size: tuple[int, int] = (800, 600)
         self.aspect_ratio: float = self.window_size[0] / self.window_size[1]
+        self.game_size: tuple[int, int] = (600, 600)
+
+        # TODO: Find a better name for those
+        self.adjust_x = self.game_size[0] / self.window_size[0]
+        self.adjust_y = self.game_size[1] / self.window_size[1]
+        self.adjust_vec = glm.vec2(self.adjust_x, self.adjust_y)
+
         pg.init()
 
         self.grid_size = 8
@@ -134,7 +141,7 @@ class GraphicsEngine:
         out vec2 v_position;
 
         void main() {
-            gl_Position = m_model_scale * m_model_translate * vec4(in_position, 0.0, 1.0);
+            gl_Position = m_model_translate * m_model_scale * vec4(in_position, 0.0, 1.0);
             v_position = in_position;
         }
         """
@@ -157,13 +164,20 @@ class GraphicsEngine:
             vertex_shader=player_vertex_shader, fragment_shader=player_fragment_shader
         )
 
-        self.player_m_model_translate = glm.translate(glm.vec3(-9.675, 7.0, 0.0))
+        # self.player_base_position = glm.vec3(-9.675, 7.0, 0.0)
+
+        self.player_base_position = glm.vec3(
+            -1.0 + self.adjust_x / self.grid_size,
+            1.0 - self.adjust_y / self.grid_size,
+            0.0,
+        )
+        self.player_m_model_translate = glm.translate(self.player_base_position)
         self.player_m_model_scale = glm.scale(
-            glm.mat4(), glm.vec3(1 / self.aspect_ratio, 1.0, 1.0)
+            glm.mat4(), glm.vec3(1.0 / self.aspect_ratio, 1.0, 1.0)
         )
         self.player_m_model_scale = glm.scale(
             self.player_m_model_scale,
-            glm.vec3(1 / self.grid_size, 1 / self.grid_size, 1.0),
+            glm.vec3(1 / self.grid_size, 1.0 / self.grid_size, 1.0),
         )
         self.player_shader_program["m_model_translate"].write(
             self.player_m_model_translate
@@ -175,7 +189,7 @@ class GraphicsEngine:
             self.player_shader_program, [(quad_vbo, "2f", "in_position")]
         )
 
-        self.player_grid_position = (3, 2)
+        self.player_grid_position = (0, 0)
         self.player_move_direction = MoveDirection.RIGHT
         self.previous_move_direction = MoveDirection.RIGHT
 
@@ -215,30 +229,6 @@ class GraphicsEngine:
                             print(
                                 f"{self.player_move_direction=},{self.previous_move_direction=}"
                             )
-
-    def update_gamestate(self):
-        if self.player_move_direction == MoveDirection.UP:
-            self.player_grid_position = (
-                self.player_grid_position[0],
-                self.player_grid_position[1] + 1,
-            )
-        elif self.player_move_direction == MoveDirection.DOWN:
-            self.player_grid_position = (
-                self.player_grid_position[0],
-                self.player_grid_position[1] - 1,
-            )
-        elif self.player_move_direction == MoveDirection.LEFT:
-            self.player_grid_position = (
-                self.player_grid_position[0] - 1,
-                self.player_grid_position[1],
-            )
-        elif self.player_move_direction == MoveDirection.RIGHT:
-            self.player_grid_position = (
-                self.player_grid_position[0] + 1,
-                self.player_grid_position[1],
-            )
-
-        self.previous_move_direction: MoveDirection = self.player_move_direction
 
     def update_gamestate(self) -> None:
         match self.player_move_direction:
@@ -282,19 +272,21 @@ class GraphicsEngine:
                 self.player_grid_position[1] % self.grid_size,
             )
 
+        print(f"{self.player_grid_position=}")
+
     def update(self) -> None:
         t_curr = time.time()
-        if t_curr > self.time_of_last_move + 0.3:
+        if t_curr > self.time_of_last_move + 1.5:
             self.update_gamestate()
 
             self.time_of_last_move = t_curr
             print("Next move!")
 
         self.player_m_model_translate = glm.translate(
-            glm.vec3(-9.675, 7.0, 0.0)
-            + glm.vec3(
-                2 * self.player_grid_position[0], -2 * self.player_grid_position[1], 0.0
-            )
+            self.player_base_position
+            + (2 / self.grid_size)
+            * glm.vec3(self.adjust_vec * glm.vec2(self.player_grid_position), 0.0)
+            * glm.vec3(1.0, -1.0, 0.0)
         )
 
         self.player_shader_program["m_model_translate"].write(
@@ -305,7 +297,7 @@ class GraphicsEngine:
         self.player_shader_program["f_time"] = self.time
 
     def render(self) -> None:
-        self.ctx.clear(color=(0.08, 0.16, 0.18))
+        self.ctx.clear(color=(1.0, 0.0, 1.0))
 
         self.player_vao.render(mgl.TRIANGLE_STRIP)
         self.board_vao.render(mgl.TRIANGLE_STRIP)

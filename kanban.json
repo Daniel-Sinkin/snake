@@ -11,6 +11,10 @@
             "title": "Backlog",
             "tasks": [
                 {
+                    "text": "Implement Adding new body parts",
+                    "id": "wqh9e8jvkycwzy24dmjfes4x"
+                },
+                {
                     "text": "Textures for player and pickups.",
                     "id": "e2bxbwobkjzinqp4nzi0f12w"
                 },
@@ -44,12 +48,7 @@
         },
         {
             "title": "In Progress",
-            "tasks": [
-                {
-                    "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor debug purposes just add a new body part every 3 steps.\n\nNo collision logic and the like, just get the body drawing by using shaders linked with game logic.",
-                    "id": "s4cknuzkllse78ft1vbcxdhu"
-                }
-            ],
+            "tasks": [],
             "id": "zfqux36dtz22kobiqwsje87c",
             "color": "#0693e3"
         },
@@ -67,6 +66,10 @@
                 {
                     "text": "## Gameboard\n* Using shaders create a checkerboard pattern",
                     "id": "eofvjkb51cswy4ldpvvrpvh2"
+                },
+                {
+                    "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor now if you hit the borders log that you should have died and loop back around (pos.x % gridsize.x)\n\nSupport multiple grid sizes but can leave the window size constant for now.",
+                    "id": "s4cknuzkllse78ft1vbcxdhu"
                 }
             ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
@@ -75,5 +78,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718798373310
+    "timestamp": 1718813831464
 }
