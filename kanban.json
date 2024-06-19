@@ -37,10 +37,6 @@
                 {
                     "text": "Pickups that increase player length",
                     "id": "bsssjf0fwdr7521b9dy6hr74"
-                },
-                {
-                    "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor debug purposes just add a new body part every 3 steps.\n\nNo collision logic and the like, just get the body drawing by using shaders linked with game logic.",
-                    "id": "s4cknuzkllse78ft1vbcxdhu"
                 }
             ],
             "id": "w8dt4w9qfi27hfdw01gt62ej",
@@ -48,7 +44,12 @@
         },
         {
             "title": "In Progress",
-            "tasks": [],
+            "tasks": [
+                {
+                    "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor debug purposes just add a new body part every 3 steps.\n\nNo collision logic and the like, just get the body drawing by using shaders linked with game logic.",
+                    "id": "s4cknuzkllse78ft1vbcxdhu"
+                }
+            ],
             "id": "zfqux36dtz22kobiqwsje87c",
             "color": "#0693e3"
         },
@@ -74,5 +75,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718761954444
+    "timestamp": 1718798373310
 }
