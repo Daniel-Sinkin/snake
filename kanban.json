@@ -8,30 +8,71 @@
             "color": "#eb144c"
         },
         {
-            "title": "To-Do",
-            "tasks": [],
+            "title": "Backlog",
+            "tasks": [
+                {
+                    "text": "Textures for player and pickups.",
+                    "id": "e2bxbwobkjzinqp4nzi0f12w"
+                },
+                {
+                    "text": "Music and Sound effects.",
+                    "id": "x41k8cqlesba7aovbjzg5fte"
+                },
+                {
+                    "text": "Player input events.",
+                    "id": "p3ip8cg3n5we13uzuzc5cran"
+                },
+                {
+                    "text": "Game Tick system independent of frame time.",
+                    "id": "gfqygmdlb09ck5n5q1lvlnei"
+                },
+                {
+                    "text": "Main Menu",
+                    "id": "ea5w76osq4e1ssdwfsmfqyc2"
+                },
+                {
+                    "text": "Timer and Score Display",
+                    "id": "phdkuu53nw3is6i6vo1fwxei"
+                },
+                {
+                    "text": "Pickups that increase player length",
+                    "id": "bsssjf0fwdr7521b9dy6hr74"
+                },
+                {
+                    "text": "## Player Character\nCreate head quad and body quad, the head will exist exactly once and the bodies will have multiple.\n\nDon't bother with optimizing, so every time we need a new quad we just create one.\n\nThe player has a direction (WASD) and moves to that position on the next game tick (independent of frame, but might be synced for starters to make things simpler)\n\nThe player can't move opposite of last move, so W -> {WAD} are possible moves.\n\nFor debug purposes just add a new body part every 3 steps.\n\nNo collision logic and the like, just get the body drawing by using shaders linked with game logic.",
+                    "id": "s4cknuzkllse78ft1vbcxdhu"
+                }
+            ],
             "id": "w8dt4w9qfi27hfdw01gt62ej",
             "color": "#fcb900"
         },
         {
-            "title": "Doing",
-            "tasks": [
-                {
-                    "text": "## Initialization\n* Open a window\n* Fill the window with a solid color",
-                    "id": "h03vwsm9z97dmsugacuagltf"
-                }
-            ],
+            "title": "In Progress",
+            "tasks": [],
             "id": "zfqux36dtz22kobiqwsje87c",
             "color": "#0693e3"
         },
         {
             "title": "Done",
-            "tasks": [],
+            "tasks": [
+                {
+                    "text": "## Initialization\n* Open a window\n* Fill the window with a solid color",
+                    "id": "h03vwsm9z97dmsugacuagltf"
+                },
+                {
+                    "text": "Draw the gameboard\n* Draw a Quad with -1, 1 NCDs for the corners\n* Scale it\n* Shift it to the left",
+                    "id": "vt84a4af8ys98x73k3hi8v7g"
+                },
+                {
+                    "text": "## Gameboard\n* Using shaders create a checkerboard pattern",
+                    "id": "eofvjkb51cswy4ldpvvrpvh2"
+                }
+            ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
             "color": "#00d084"
         }
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718754507112
+    "timestamp": 1718761954444
 }
