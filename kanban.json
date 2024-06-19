@@ -11,10 +11,6 @@
             "title": "Backlog",
             "tasks": [
                 {
-                    "text": "Game end states:\n* Hitting own body\n* Hitting Border",
-                    "id": "jypezxx2afezwgfs27lnuw1d"
-                },
-                {
                     "text": "Textures for player and pickups.",
                     "id": "e2bxbwobkjzinqp4nzi0f12w"
                 },
@@ -33,10 +29,6 @@
                 {
                     "text": "Timer and Score Display",
                     "id": "phdkuu53nw3is6i6vo1fwxei"
-                },
-                {
-                    "text": "Implement pickups\n* Random Spawning\n* Disappear on picking up\n* Increase tail lenght",
-                    "id": "bsssjf0fwdr7521b9dy6hr74"
                 }
             ],
             "id": "w8dt4w9qfi27hfdw01gt62ej",
@@ -70,6 +62,14 @@
                 {
                     "text": "## Body Parts\nCreate a class for them so you can easily spawn them\n\nTrack all play positions in a list and update the body part positions based on that.\n\nSet the body part positions to be trailing the main body based on that, don't add any collision checks, those will be purely logic based by checking against the list.",
                     "id": "wqh9e8jvkycwzy24dmjfes4x"
+                },
+                {
+                    "text": "Implement pickups\n* Random Spawning\n* Disappear on picking up\n* Increase tail lenght",
+                    "id": "bsssjf0fwdr7521b9dy6hr74"
+                },
+                {
+                    "text": "Game end states:\n* Hitting own body\n  * Simple collision logic, check if new position would be within last k previous positions, where k is the number of body elements.\n* Hitting Border",
+                    "id": "jypezxx2afezwgfs27lnuw1d"
                 }
             ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
@@ -78,5 +78,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718838407864
+    "timestamp": 1718841374900
 }
