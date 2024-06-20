@@ -11,16 +11,8 @@
             "title": "Backlog",
             "tasks": [
                 {
-                    "text": "Textures for player and pickups.",
-                    "id": "e2bxbwobkjzinqp4nzi0f12w"
-                },
-                {
                     "text": "Music and Sound effects.",
                     "id": "x41k8cqlesba7aovbjzg5fte"
-                },
-                {
-                    "text": "Game Tick system independent of frame time.",
-                    "id": "gfqygmdlb09ck5n5q1lvlnei"
                 },
                 {
                     "text": "Main Menu",
@@ -36,7 +28,12 @@
         },
         {
             "title": "In Progress",
-            "tasks": [],
+            "tasks": [
+                {
+                    "text": "## Improving the look of the game\nMake the body parts closer to the head be closer in coloer to the header.\n\nMake the grid less ugly, maybe adding gentle effects on it as well.",
+                    "id": "pbffj3f26nq960p11hbdelif"
+                }
+            ],
             "id": "zfqux36dtz22kobiqwsje87c",
             "color": "#0693e3"
         },
@@ -70,6 +67,10 @@
                 {
                     "text": "Game end states:\n* Hitting own body\n  * Simple collision logic, check if new position would be within last k previous positions, where k is the number of body elements.\n* Hitting Border",
                     "id": "jypezxx2afezwgfs27lnuw1d"
+                },
+                {
+                    "text": "Game Tick system independent of frame time.",
+                    "id": "gfqygmdlb09ck5n5q1lvlnei"
                 }
             ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
@@ -78,5 +79,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718841374900
+    "timestamp": 1718846962995
 }

@@ -4,6 +4,7 @@ os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import datetime as dt
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TypeAlias, cast
 
@@ -12,13 +13,22 @@ import moderngl as mgl
 import numpy as np
 import pygame as pg
 from glm import mat4, vec3
-from moderngl import Buffer, Context, VertexArray
+from moderngl import Buffer, Context, Texture, VertexArray
+from PIL import Image
 
 from .math import ndc_to_screenspace, screenspace_to_ndc
 
 GRID_POSITION: TypeAlias = tuple[int, int]
 SCREEN_POSITION: TypeAlias = tuple[int, int]
 GAME_POSITION: TypeAlias = tuple[int, int]
+
+
+@dataclass
+class Settings:
+    WINDOW_SIZE: tuple[int, int] = (800, 600)
+    GAME_SIZE: tuple[int, int] = (600, 600)
+    GRID_SIZE: int = 32
+    GAMETICK_INTERVAL_BASE: float = 0.15  # Seconds between each game tick
 
 
 class MoveDirection(Enum):
@@ -31,18 +41,18 @@ class MoveDirection(Enum):
 
 class GraphicsEngine:
     def __init__(self):
-        self.window_size: tuple[int, int] = (800, 600)
+        self.window_size: tuple[int, int] = Settings.WINDOW_SIZE
         self.aspect_ratio: float = self.window_size[0] / self.window_size[1]
-        self.game_size: tuple[int, int] = (600, 600)
+        self.game_size: tuple[int, int] = Settings.GAME_SIZE
 
         # TODO: Find a better name for those
-        self.adjust_x = self.game_size[0] / self.window_size[0]
-        self.adjust_y = self.game_size[1] / self.window_size[1]
+        self.adjust_x: float = self.game_size[0] / self.window_size[0]
+        self.adjust_y: float = self.game_size[1] / self.window_size[1]
         self.adjust_vec = glm.vec2(self.adjust_x, self.adjust_y)
 
         pg.init()
 
-        self.grid_size: int = 8
+        self.grid_size: int = Settings.GRID_SIZE
 
         pg.display.gl_set_attribute(pg.GL_CONTEXT_MAJOR_VERSION, 3)
         pg.display.gl_set_attribute(pg.GL_CONTEXT_MINOR_VERSION, 3)
@@ -122,8 +132,10 @@ class GraphicsEngine:
             vertex_shader=board_vertex_shader, fragment_shader=board_fragment_shader
         )
 
-        board_m_model = glm.translate(vec3(-0.25, 0.0, 0.0))
-        board_m_model = glm.scale(board_m_model, vec3(1 / self.aspect_ratio, 1.0, 1.0))
+        board_m_model: mat4 = glm.translate(vec3(-0.25, 0.0, 0.0))
+        board_m_model: mat4 = glm.scale(
+            board_m_model, vec3(1 / self.aspect_ratio, 1.0, 1.0)
+        )
 
         self.board_shader_program["m_model"].write(board_m_model)
         self.board_shader_program["i_gridsize"] = self.grid_size
@@ -225,7 +237,7 @@ class GraphicsEngine:
             PlayerBodyPart(self) for _ in range(4)
         ]
 
-        self.time_of_last_move: float = time.time()
+        self.time_of_last_move: float = time.perf_counter()
 
         self.game_tick_counter = 0
 
@@ -274,7 +286,7 @@ class GraphicsEngine:
         # fmt: on
         self.pickup_grid_position: GRID_POSITION = (5, 5)
 
-        self.pickup_shader_program = self.ctx.program(
+        self.pickup_shader_program: mgl.Program = self.ctx.program(
             vertex_shader=self.pickup_vertex_shader,
             fragment_shader=self.pickup_fragment_shader,
         )
@@ -296,6 +308,13 @@ class GraphicsEngine:
         self.pickup_vao: VertexArray = self.ctx.vertex_array(
             self.pickup_shader_program, [(self.triangle_vbo, "2f", "in_position")]
         )
+
+    def get_shader_programs(self) -> list[mgl.Program]:
+        return [
+            self.board_shader_program,
+            self.player_head_shader_program,
+            self.pickup_shader_program,
+        ]
 
     def _check_event_keydown_wasd(self, event: pg.event.Event) -> None:
         new_move_direction = MoveDirection.NONE
@@ -334,17 +353,7 @@ class GraphicsEngine:
                 case pg.KEYDOWN:
                     self._check_event_keydown(event)
 
-    def update_gamestate(self) -> None:
-        """
-        Ticks for the actual game logic, invoked by the game loop.
-        """
-        if len(self.player_body_parts) == 0:
-            self.tail_positions = []
-        else:
-            self.tail_positions = self.player_previous_grid_positions[
-                -len(self.player_body_parts) :
-            ]
-
+    def _update_gamestate_moving(self) -> None:
         self.previous_move_direction = self.player_move_direction
         self.player_previous_grid_positions.append(self.player_grid_position)
         match self.player_move_direction:
@@ -371,6 +380,7 @@ class GraphicsEngine:
             case MoveDirection.NONE:
                 pass
 
+    def _update_gamestate_death_checks(self) -> None:
         if (self.player_grid_position[0] < 0) or (
             self.player_grid_position[0] >= self.grid_size
         ):
@@ -386,40 +396,45 @@ class GraphicsEngine:
             self.on_death("Collided with own tail!")
             return
 
+    def _update_gamestate_pickup(self) -> None:
+        self.player_body_parts.append(PlayerBodyPart(self))
+        blocked_grids: list[GRID_POSITION] = [
+            self.player_grid_position
+        ] + self.tail_positions
+
+        generated_square: GRID_POSITION = self.player_grid_position
+        assert (
+            generated_square in blocked_grids
+        ), "generated_squares should be initialized to a blocked grid."
+        while generated_square in blocked_grids:
+            generated_square: GRID_POSITION = (
+                np.random.randint(self.grid_size),
+                np.random.randint(self.grid_size),
+            )
+            print(f"{generated_square=}")
+        self.pickup_grid_position = generated_square
+
+    def update_gamestate(self) -> None:
+        """
+        Ticks for the actual game logic, invoked by the game loop.
+        """
+        if len(self.player_body_parts) == 0:
+            self.tail_positions = []
+        else:
+            self.tail_positions = self.player_previous_grid_positions[
+                -len(self.player_body_parts) :
+            ]
+
+        self._update_gamestate_moving()
+
+        self._update_gamestate_death_checks()
+
         if self.player_grid_position == self.pickup_grid_position:
-            self.player_body_parts.append(PlayerBodyPart(self))
-            blocked_grids: list[GRID_POSITION] = [
-                self.player_grid_position
-            ] + self.tail_positions
-
-            generated_square: GRID_POSITION = self.player_grid_position
-            assert (
-                generated_square in blocked_grids
-            ), "generated_squares should be initialized to a blocked grid."
-            while generated_square in blocked_grids:
-                generated_square: GRID_POSITION = (
-                    np.random.randint(self.grid_size),
-                    np.random.randint(self.grid_size),
-                )
-                print(f"{generated_square=}")
-            self.pickup_grid_position = generated_square
-
-        self.player_grid_position = cast(GRID_POSITION, self.player_grid_position)
-        print(f"{self.player_grid_position=}")
+            self._update_gamestate_pickup()
 
         self.game_tick_counter += 1
 
-    def update(self) -> None:
-        """
-        This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
-        """
-        t_curr = time.time()
-        if t_curr > self.time_of_last_move + 0.3:
-            self.update_gamestate()
-
-            self.time_of_last_move = t_curr
-            print("Next move!")
-
+    def _update_player(self) -> None:
         for body_parts in self.player_body_parts:
             body_parts.update()
 
@@ -436,6 +451,7 @@ class GraphicsEngine:
             self.player_body_m_model_translate
         )
 
+    def _update_pickup(self):
         self.pickup_body_m_model_translate = glm.translate(
             self.grid_00_position
             + (2 / self.grid_size)
@@ -455,9 +471,26 @@ class GraphicsEngine:
             ),
         )
 
-        self.board_shader_program["f_time"] = self.time
-        self.player_head_shader_program["f_time"] = self.time
-        self.pickup_shader_program["f_time"] = self.time
+    def update(self) -> None:
+        """
+        This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
+        """
+        t_curr = time.perf_counter()
+        if t_curr > self.time_of_last_move + Settings.GAMETICK_INTERVAL_BASE:
+            print(t_curr - self.time_of_last_move)
+            self.update_gamestate()
+
+            self.time_of_last_move = time.perf_counter()
+            print("Next move!")
+
+        self._update_player()
+
+        self._update_pickup()
+
+        for program in self.get_shader_programs():
+            self.board_shader_program["f_time"] = self.time
+            self.player_head_shader_program["f_time"] = self.time
+            self.pickup_shader_program["f_time"] = self.time
 
     def render(self) -> None:
         self.ctx.clear(color=(1.0, 0.0, 1.0))
@@ -492,6 +525,23 @@ class GraphicsEngine:
         pg.time.wait(3000)
         print("Quitting")
         self.is_running = False
+
+    def get_texture(self) -> Texture:
+        image: Image.Image = Image.open(
+            "/Users/danielsinkin/GitHub_private/snake/data/texture.jpg"
+        )
+        image = image.convert("RGB")
+
+        data: bytes = np.array(image).tobytes()
+
+        texture: Texture = self.ctx.texture(size=image.size, components=3, data=data)
+
+        texture.filter = (mgl.LINEAR_MIPMAP_LINEAR, mgl.LINEAR)
+        texture.build_mipmaps()
+
+        texture.anisotropy = 16.0
+
+        return texture
 
 
 class Pickup:
