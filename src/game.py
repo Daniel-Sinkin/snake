@@ -1,5 +1,6 @@
 import os
 
+# Hides the welcome message from pygame
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
 import datetime as dt
 import time
@@ -54,6 +55,9 @@ class GraphicsEngine:
         self.adjust_vec = glm.vec2(self.adjust_x, self.adjust_y)
 
         pg.init()
+        pg.mixer.init()
+
+        self.pickup_sound = pg.mixer.Sound("data/pickup.mp3")
 
         self.grid_size: int = Settings.GRID_SIZE
 
@@ -230,9 +234,10 @@ class GraphicsEngine:
         out vec4 out_color;
 
         uniform float f_time;
+        uniform int id;
 
         void main() {
-            out_color = vec4(0.3 + 0.2 * sin(f_time * PI / 2.0), 0.4, 0.15, 1.0);
+            out_color = vec4(0.3 + 0.1 * sin(f_time * PI + id * PI / 6), 0.4, 0.2, 1.0);
         }
         """
 
@@ -426,9 +431,11 @@ class GraphicsEngine:
         N = Settings.GAMETICK_N_BODIES_TO_INTERVAL_MIN
         kp = int(min(len(self.player_body_parts), N))
 
-        self.gametick_interval = (kp / N) * Settings.GAMETICK_INTERVAL_MIN + (
-            N - kp
-        ) / N * Settings.GAMETICK_INTERVAL_BASE
+        gt_min = Settings.GAMETICK_INTERVAL_MIN
+        gt_base = Settings.GAMETICK_INTERVAL_BASE
+        self.gametick_interval = kp / N * gt_min + (N - kp) / N * gt_base
+
+        self.pickup_sound.play()
 
     def update_gamestate(self) -> None:
         """
@@ -571,6 +578,9 @@ class PlayerBodyPart:
     _id = 0
 
     def __init__(self, app: GraphicsEngine):
+        self.id = PlayerBodyPart._id
+        PlayerBodyPart._id += 1
+
         self.app: GraphicsEngine = app
         self.ctx: Context = self.app.ctx
         self.program: mgl.Program = self.ctx.program(
@@ -588,12 +598,12 @@ class PlayerBodyPart:
         )
         self.program["m_model_translate"].write(self.m_model_translate)
         self.program["m_model_scale"].write(self.m_model_scale)
+        self.program["f_time"] = 0.0
+        self.program["id"] = self.id
 
         self.vao: VertexArray = self.ctx.vertex_array(
             self.program, [(self.app.quad_vbo, "2f", "in_position")]
         )
-        self.id = PlayerBodyPart._id
-        PlayerBodyPart._id += 1
 
     def update(self):
         m_model_translate = glm.translate(
@@ -614,7 +624,13 @@ class PlayerBodyPart:
 
     def __del__(self):
         # OpenGL cleanup
-        if self.program is not None:
-            self.program.release()
-        if self.vao is not None:
-            self.vao.release()
+        try:
+            if self.program is not None:
+                self.program.release()
+        except AttributeError:
+            pass
+        try:
+            if self.vao is not None:
+                self.vao.release()
+        except AttributeError:
+            pass
