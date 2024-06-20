@@ -1,0 +1,7 @@
+click==8.1.7
+glcontext==2.5.0
+moderngl==5.10.0
+numpy==2.0.0
+pillow==10.3.0
+pygame==2.5.2
+PyGLM==2.7.1
