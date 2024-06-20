@@ -13,7 +13,7 @@ import glm
 import moderngl as mgl
 import numpy as np
 import pygame as pg
-from glm import mat4, vec3
+from glm import mat4, vec2, vec3
 from moderngl import Buffer, Context, Texture, VertexArray
 from PIL import Image
 
@@ -209,18 +209,20 @@ class GraphicsEngine:
         )
         self.player_head_shader_program["f_time"] = 0.0
 
-        self.player_head_vao = self.ctx.vertex_array(
+        self.player_head_vao: VertexArray = self.ctx.vertex_array(
             self.player_head_shader_program, [(self.quad_vbo, "2f", "in_position")]
         )
 
         self.player_grid_position: GRID_POSITION = (3, 2)
 
-        self.player_previous_grid_positions: list[GRID_POSITION] = [
-            (0, 3),
-            (0, 2),
-            (1, 2),
-            (2, 2),
+        # fmt: off
+        self.player_previous_grid_positions_initial: list[GRID_POSITION] = [
+            (0, 3), (0, 2), (1, 2), (2, 2),
         ]
+        # fmt: on
+        self.player_previous_grid_positions: list[GRID_POSITION] = (
+            self.player_previous_grid_positions_initial.copy()
+        )
 
         self.player_move_direction = MoveDirection.RIGHT
         self.previous_move_direction = MoveDirection.RIGHT
@@ -319,6 +321,10 @@ class GraphicsEngine:
 
         self.gametick_interval = Settings.GAMETICK_INTERVAL_BASE
 
+        self.menu = Menu(self)
+
+        self.game_running = False
+
     def get_shader_programs(self) -> list[mgl.Program]:
         return [
             self.board_shader_program,
@@ -354,6 +360,10 @@ class GraphicsEngine:
     def _check_event_keydown(self, event: pg.event.Event) -> None:
         if event.key in [pg.K_w, pg.K_s, pg.K_a, pg.K_d]:
             self._check_event_keydown_wasd(event)
+        elif event.key == pg.K_SPACE:
+            if not self.game_running:
+                self.game_running = True
+                self.menu.is_active = False
 
     def check_event(self) -> None:
         for event in pg.event.get():
@@ -422,8 +432,8 @@ class GraphicsEngine:
         ), "generated_squares should be initialized to a blocked grid."
         while generated_square in blocked_grids:
             generated_square: GRID_POSITION = (
-                np.random.randint(self.grid_size),
-                np.random.randint(self.grid_size),
+                int(np.random.randint(self.grid_size)),
+                int(np.random.randint(self.grid_size)),
             )
             print(f"{generated_square=}")
         self.pickup_grid_position = generated_square
@@ -431,8 +441,8 @@ class GraphicsEngine:
         N = Settings.GAMETICK_N_BODIES_TO_INTERVAL_MIN
         kp = int(min(len(self.player_body_parts), N))
 
-        gt_min = Settings.GAMETICK_INTERVAL_MIN
-        gt_base = Settings.GAMETICK_INTERVAL_BASE
+        gt_min = float(Settings.GAMETICK_INTERVAL_MIN)
+        gt_base = float(Settings.GAMETICK_INTERVAL_BASE)
         self.gametick_interval = kp / N * gt_min + (N - kp) / N * gt_base
 
         self.pickup_sound.play()
@@ -499,7 +509,9 @@ class GraphicsEngine:
         This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
         """
         t_curr = time.perf_counter()
-        if t_curr > self.time_of_last_move + self.gametick_interval:
+        if self.game_running and (
+            t_curr > self.time_of_last_move + self.gametick_interval
+        ):
             print(f"{self.gametick_interval=}")
             self.update_gamestate()
 
@@ -507,7 +519,6 @@ class GraphicsEngine:
             print("Next move!")
 
         self._update_player()
-
         self._update_pickup()
 
         for program in self.get_shader_programs():
@@ -515,8 +526,12 @@ class GraphicsEngine:
             self.player_head_shader_program["f_time"] = self.time
             self.pickup_shader_program["f_time"] = self.time
 
+        self.menu.update()
+
     def render(self) -> None:
         self.ctx.clear(color=(1.0, 0.0, 1.0))
+
+        self.menu.render()
 
         self.pickup_vao.render(mgl.LINE_LOOP)
         self.player_head_vao.render(mgl.TRIANGLE_STRIP)
@@ -541,13 +556,14 @@ class GraphicsEngine:
             self.clock.tick(60.0)
 
     def on_death(self, info=None) -> None:
-        print("You dead!")
-        if info is not None:
-            print("Info:")
-            print(info)
-        pg.time.wait(3000)
-        print("Quitting")
-        self.is_running = False
+        self.menu.is_active = True
+        # print("You dead!")
+        # if info is not None:
+        # print("Info:")
+        # print(info)
+        # pg.time.wait(3000)
+        # print("Quitting")
+        # self.is_running = False
 
     def get_texture(self) -> Texture:
         image: Image.Image = Image.open(
@@ -605,8 +621,8 @@ class PlayerBodyPart:
             self.program, [(self.app.quad_vbo, "2f", "in_position")]
         )
 
-    def update(self):
-        m_model_translate = glm.translate(
+    def update(self) -> None:
+        m_model_translate: mat4 = glm.translate(
             self.app.grid_00_position
             + (2 / self.app.grid_size)
             * vec3(
@@ -619,11 +635,10 @@ class PlayerBodyPart:
         self.program["m_model_translate"].write(m_model_translate)
         self.program["f_time"] = self.app.time
 
-    def render(self):
+    def render(self) -> None:
         self.vao.render(mgl.TRIANGLE_STRIP)
 
-    def __del__(self):
-        # OpenGL cleanup
+    def __del__(self) -> None:
         try:
             if self.program is not None:
                 self.program.release()
@@ -634,3 +649,92 @@ class PlayerBodyPart:
                 self.vao.release()
         except AttributeError:
             pass
+
+
+class Menu:
+    def __init__(self, app: GraphicsEngine):
+        self.app: GraphicsEngine = app
+        self.ctx: Context = self.app.ctx
+
+        vertex_shader = """
+        # version 330
+
+        layout(location = 0) in vec2 in_position;
+
+        out vec2 v_position;
+
+        void main() {
+            v_position = in_position;
+            gl_Position = vec4(v_position, 0.0, 1.0);
+        }
+        """
+
+        fragment_shader = """
+        # version 330
+
+        const float PI = 3.1415926;
+
+        out vec4 out_color;
+        
+        uniform vec2 u_resolution;
+        uniform float u_time;
+
+        uniform vec2 u_mouse;
+
+        void main() {
+           float aspect = u_resolution.x / u_resolution.y;    
+    
+            vec2 st = gl_FragCoord.xy / u_resolution.xy;
+
+            float t = u_time;
+
+            vec2 smouse = u_mouse.xy / u_resolution.xy;
+            smouse.y = 1.0 - smouse.y;
+
+            float r1 = 0.1 + 0.05 * sin(PI * u_time); // radius for the first ring
+            float r2 = 0.3 + 0.05 * sin(PI * u_time); // radius for the second ring
+            vec2 points1[6];
+            vec2 points2[6];
+
+            for (int i = 0; i < 6; i++) {
+                float angle1 = 2.0 * PI * float(i) / 6.0 + PI * u_time;
+                float angle2 = 2.0 * PI * float(i) / 6.0 - PI * u_time;
+                points1[i] = smouse + r1 * vec2(cos(angle1) / aspect, sin(angle1));
+                points2[i] = smouse + r2 * vec2(cos(angle2) / aspect, sin(angle2));
+            }
+
+            float product = distance(smouse, st);
+            for (int i = 0; i < 6; i++) {
+                product *= distance(points1[i], st);
+                product *= distance(points2[i], st);
+            }
+
+            vec3 color = vec3(0.0);
+            float val = max(1 - pow(product, 0.03 + 0.02 * sin(u_time * PI)), 0.0);
+            color = 0.8 * vec3(val, 0.0, val);
+
+            out_color = vec4(color, 1.0);
+        }
+        """
+        self.program: mgl.Program = self.ctx.program(
+            vertex_shader=vertex_shader, fragment_shader=fragment_shader
+        )
+
+        self.program["u_resolution"] = self.app.window_size
+        self.program["u_time"] = self.app.time
+        self.program["u_mouse"] = pg.mouse.get_pos()
+
+        self.vao: VertexArray = self.ctx.vertex_array(
+            self.program, [(self.app.quad_vbo, "2f", "in_position")]
+        )
+
+        self.is_active = False
+
+    def update(self):
+        if self.is_active:
+            self.program["u_time"] = self.app.time
+            print(vec2(pg.mouse.get_pos()) / vec2(self.app.window_size))
+            self.program["u_mouse"] = pg.mouse.get_pos()
+
+    def render(self):
+        self.vao.render(mgl.TRIANGLE_STRIP)
