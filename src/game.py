@@ -1,23 +1,18 @@
 import os
-
-# Hides the welcome message from pygame
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-import datetime as dt
 import time
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TypeAlias, cast
+from typing import TypeAlias
 
 import glm
 import moderngl as mgl
 import numpy as np
-import pygame as pg
-from glm import mat4, vec2, vec3
+from glm import mat4, vec3
 from moderngl import Buffer, Context, Texture, VertexArray
 from PIL import Image
 
-from .math import ndc_to_screenspace, screenspace_to_ndc
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
+import pygame as pg  # noqa: E402
 
 GRID_POSITION: TypeAlias = tuple[int, int]
 SCREEN_POSITION: TypeAlias = tuple[int, int]
@@ -26,7 +21,7 @@ GAME_POSITION: TypeAlias = tuple[int, int]
 
 @dataclass
 class Settings:
-    WINDOW_SIZE: tuple[int, int] = (800, 600)
+    WINDOW_SIZE: tuple[int, int] = (600, 600)
     GAME_SIZE: tuple[int, int] = (600, 600)
     GRID_SIZE: int = 32
     GAMETICK_INTERVAL_BASE: float = 0.10  # Seconds between each game tick
@@ -120,7 +115,7 @@ class GraphicsEngine:
         out vec4 out_color;
 
         uniform int i_gridsize;
-        uniform float f_time;
+        // uniform float f_time;
 
         void main() {
             vec2 st = v_position / 2.0;
@@ -128,18 +123,20 @@ class GraphicsEngine:
             vec2 floored = vec2(floor(st.x * i_gridsize), floor(st.y * i_gridsize));
             float f_sum = floored.x + floored.y;
 
+            vec4 grid_color;
             if (mod(f_sum, 2.0) >= 1.0) {
-                out_color = vec4(0.2 * (2 + sin(PI * f_time * 0.5)), vec2(0.0), 1.0);
+                grid_color = vec4(0.2, 0.2, 0.6, 1.0);
             } else {
-                out_color = vec4(0.2 * (2 + sin(PI * f_time * 0.5 + PI)), vec2(0.0), 1.0);
+                grid_color = vec4(0.3, 0.3, 0.4, 1.0);
             }
+            out_color = grid_color;
         }
         """
         self.board_shader_program = self.ctx.program(
             vertex_shader=board_vertex_shader, fragment_shader=board_fragment_shader
         )
 
-        board_m_model: mat4 = glm.translate(vec3(-0.25, 0.0, 0.0))
+        board_m_model: mat4 = mat4()
         board_m_model: mat4 = glm.scale(
             board_m_model, vec3(1 / self.aspect_ratio, 1.0, 1.0)
         )
@@ -176,9 +173,15 @@ class GraphicsEngine:
         out vec4 out_color;
 
         uniform float f_time;
+        uniform float f_time_of_last_pickup;
 
         void main() {
-            out_color = vec4(0.5 - 0.3 * abs(sin(f_time * PI * 3)), 0.7, 0.3, 1.0);
+            if(f_time - f_time_of_last_pickup >= 0.5) {
+                out_color = vec4(0.5 - 0.3 * abs(sin(f_time * PI * 3)), 0.7, 0.3, 1.0);
+            } else {
+                out_color = vec4(0.8, 0.1, 0.8, 1.0);
+            
+            }
         }
         """
         self.player_head_shader_program: mgl.Program = self.ctx.program(
@@ -208,24 +211,11 @@ class GraphicsEngine:
             self.player_m_model_scale
         )
         self.player_head_shader_program["f_time"] = 0.0
+        self.player_head_shader_program["f_time_of_last_pickup"] = -1000.0
 
         self.player_head_vao: VertexArray = self.ctx.vertex_array(
             self.player_head_shader_program, [(self.quad_vbo, "2f", "in_position")]
         )
-
-        self.player_grid_position: GRID_POSITION = (3, 2)
-
-        # fmt: off
-        self.player_previous_grid_positions_initial: list[GRID_POSITION] = [
-            (0, 3), (0, 2), (1, 2), (2, 2),
-        ]
-        # fmt: on
-        self.player_previous_grid_positions: list[GRID_POSITION] = (
-            self.player_previous_grid_positions_initial.copy()
-        )
-
-        self.player_move_direction = MoveDirection.RIGHT
-        self.previous_move_direction = MoveDirection.RIGHT
 
         self.quad_fragment_shader = """
         #version 330
@@ -242,10 +232,6 @@ class GraphicsEngine:
             out_color = vec4(0.3 + 0.1 * sin(f_time * PI + id * PI / 6), 0.4, 0.2, 1.0);
         }
         """
-
-        self.player_body_parts: list[PlayerBodyPart] = [
-            PlayerBodyPart(self) for _ in range(4)
-        ]
 
         self.time_of_last_move: float = time.perf_counter()
 
@@ -319,9 +305,10 @@ class GraphicsEngine:
             self.pickup_shader_program, [(self.triangle_vbo, "2f", "in_position")]
         )
 
-        self.gametick_interval = Settings.GAMETICK_INTERVAL_BASE
+        self.gametick_interval: float = Settings.GAMETICK_INTERVAL_BASE
 
         self.menu = Menu(self)
+        self.menu.is_active = True
 
         self.game_running = False
 
@@ -355,15 +342,16 @@ class GraphicsEngine:
             and new_move_direction != self.player_move_direction
         ):
             self.player_move_direction = new_move_direction
-            print(f"{self.player_move_direction=},{self.previous_move_direction=}")
 
     def _check_event_keydown(self, event: pg.event.Event) -> None:
         if event.key in [pg.K_w, pg.K_s, pg.K_a, pg.K_d]:
             self._check_event_keydown_wasd(event)
         elif event.key == pg.K_SPACE:
-            if not self.game_running:
-                self.game_running = True
-                self.menu.is_active = False
+            if self.menu.is_active:
+                self.start_game()
+        elif event.key == pg.K_ESCAPE:
+            if self.game_running:
+                self.open_main_menu()
 
     def check_event(self) -> None:
         for event in pg.event.get():
@@ -445,6 +433,8 @@ class GraphicsEngine:
         gt_base = float(Settings.GAMETICK_INTERVAL_BASE)
         self.gametick_interval = kp / N * gt_min + (N - kp) / N * gt_base
 
+        self.player_head_shader_program["f_time_of_last_pickup"] = self.time
+
         self.pickup_sound.play()
 
     def update_gamestate(self) -> None:
@@ -508,37 +498,45 @@ class GraphicsEngine:
         """
         This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
         """
-        t_curr = time.perf_counter()
-        if self.game_running and (
-            t_curr > self.time_of_last_move + self.gametick_interval
-        ):
-            print(f"{self.gametick_interval=}")
-            self.update_gamestate()
 
-            self.time_of_last_move = time.perf_counter()
-            print("Next move!")
+        if self.game_running:
+            assert not self.menu.is_active
+            t_curr = time.perf_counter()
+            if self.game_running and (
+                t_curr > self.time_of_last_move + self.gametick_interval
+            ):
+                print(f"{self.gametick_interval=}")
+                self.update_gamestate()
 
-        self._update_player()
-        self._update_pickup()
+                self.time_of_last_move = time.perf_counter()
+                print("Next move!")
 
-        for program in self.get_shader_programs():
-            self.board_shader_program["f_time"] = self.time
-            self.player_head_shader_program["f_time"] = self.time
-            self.pickup_shader_program["f_time"] = self.time
+            self._update_player()
+            self._update_pickup()
 
-        self.menu.update()
+            for program in self.get_shader_programs():
+                self.player_head_shader_program["f_time"] = self.time
+                self.pickup_shader_program["f_time"] = self.time
+        if self.menu.is_active:
+            assert not self.game_running
+            self.menu.update()
 
     def render(self) -> None:
         self.ctx.clear(color=(1.0, 0.0, 1.0))
 
-        self.menu.render()
+        if self.menu.is_active:
+            assert not self.game_running
 
-        self.pickup_vao.render(mgl.LINE_LOOP)
-        self.player_head_vao.render(mgl.TRIANGLE_STRIP)
-        for body_part in self.player_body_parts:
-            body_part.render()
+            self.menu.render()
+        elif self.game_running:
+            self.pickup_vao.render(mgl.LINE_LOOP)
+            self.player_head_vao.render(mgl.TRIANGLE_STRIP)
+            for body_part in self.player_body_parts:
+                body_part.render()
 
-        self.board_vao.render(mgl.TRIANGLE_STRIP)
+            self.board_vao.render(mgl.TRIANGLE_STRIP)
+        else:
+            raise RuntimeError("Neither menu nor game is active!")
 
         pg.display.flip()
 
@@ -556,14 +554,54 @@ class GraphicsEngine:
             self.clock.tick(60.0)
 
     def on_death(self, info=None) -> None:
+        self.open_main_menu()
+
+    def open_main_menu(self) -> None:
         self.menu.is_active = True
-        # print("You dead!")
-        # if info is not None:
-        # print("Info:")
-        # print(info)
-        # pg.time.wait(3000)
-        # print("Quitting")
-        # self.is_running = False
+        self.game_running = False
+
+    def setup_gamestart(self) -> None:
+        self.player_grid_position: GRID_POSITION = (
+            self.grid_size // 2,
+            self.grid_size // 2,
+        )
+        self.player_previous_grid_positions: list[GRID_POSITION] = [
+            (self.player_grid_position[0], self.player_grid_position[1] - i)
+            for i in range(1, 6)
+        ][::-1]
+
+        self.blocked_grids: list[GRID_POSITION] = (
+            self.player_previous_grid_positions
+            + [
+                self.player_grid_position,
+            ]
+        )
+        for p1, p2 in zip(self.blocked_grids[:-1], self.blocked_grids[1:]):
+            # Not equal and exactly one vertical or horizontal step
+            assert abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]) == 1
+
+        # No duplicates
+        assert len(self.player_previous_grid_positions) == len(
+            set(self.player_previous_grid_positions)
+        )
+
+        self.player_move_direction = MoveDirection.DOWN
+        self.previous_move_direction = MoveDirection.DOWN
+
+        PlayerBodyPart._id = 0
+
+        self.player_body_parts: list[PlayerBodyPart] = [
+            PlayerBodyPart(self)
+            for _ in range(len(self.player_previous_grid_positions))
+        ]
+
+    def start_game(self) -> None:
+        assert self.menu.is_active
+        self.menu.is_active = False
+
+        self.setup_gamestart()
+
+        self.game_running = True
 
     def get_texture(self) -> Texture:
         image: Image.Image = Image.open(
@@ -585,8 +623,8 @@ class GraphicsEngine:
 
 class Pickup:
     def __init__(self, app: GraphicsEngine) -> None:
-        self.app = app
-        self.ctx = self.app.ctx
+        self.app: GraphicsEngine = app
+        self.ctx: Context = self.app.ctx
         self.position: GAME_POSITION = (0, 0)
 
 
@@ -611,6 +649,9 @@ class PlayerBodyPart:
         self.m_model_scale: mat4 = glm.scale(
             self.m_model_scale,
             vec3(1 / self.app.grid_size, 1.0 / self.app.grid_size, 1.0),
+        )
+        self.m_model_scale: mat4 = glm.scale(
+            self.m_model_scale, vec3(1.0 - 0.2 * min(self.id, 3))
         )
         self.program["m_model_translate"].write(self.m_model_translate)
         self.program["m_model_scale"].write(self.m_model_scale)
@@ -730,10 +771,9 @@ class Menu:
 
         self.is_active = False
 
-    def update(self):
+    def update(self) -> None:
         if self.is_active:
             self.program["u_time"] = self.app.time
-            print(vec2(pg.mouse.get_pos()) / vec2(self.app.window_size))
             self.program["u_mouse"] = pg.mouse.get_pos()
 
     def render(self):

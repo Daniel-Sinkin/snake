@@ -1,7 +1,7 @@
 from src.game import GraphicsEngine
 
 
-def main():
+def main() -> None:
     graphics_engine = GraphicsEngine()
     graphics_engine.run()
 
