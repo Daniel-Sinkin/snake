@@ -21,6 +21,10 @@
                 {
                     "text": "Timer and Score Display",
                     "id": "phdkuu53nw3is6i6vo1fwxei"
+                },
+                {
+                    "text": "## Improving the look of the game\nMake the body parts closer to the head be closer in coloer to the header.\n\nMake the grid less ugly, maybe adding gentle effects on it as well.",
+                    "id": "pbffj3f26nq960p11hbdelif"
                 }
             ],
             "id": "w8dt4w9qfi27hfdw01gt62ej",
@@ -28,12 +32,7 @@
         },
         {
             "title": "In Progress",
-            "tasks": [
-                {
-                    "text": "## Improving the look of the game\nMake the body parts closer to the head be closer in coloer to the header.\n\nMake the grid less ugly, maybe adding gentle effects on it as well.",
-                    "id": "pbffj3f26nq960p11hbdelif"
-                }
-            ],
+            "tasks": [],
             "id": "zfqux36dtz22kobiqwsje87c",
             "color": "#0693e3"
         },
@@ -71,6 +70,10 @@
                 {
                     "text": "Game Tick system independent of frame time.",
                     "id": "gfqygmdlb09ck5n5q1lvlnei"
+                },
+                {
+                    "text": "Game speeds up on pickups",
+                    "id": "r0r510xyg46hk21oxic240hj"
                 }
             ],
             "id": "tfj6n6591bmg9ayxxzfvg53s",
@@ -79,5 +82,5 @@
     ],
     "autosave": true,
     "saveToFile": true,
-    "timestamp": 1718846962995
+    "timestamp": 1718848914913
 }

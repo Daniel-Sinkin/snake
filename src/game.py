@@ -28,7 +28,10 @@ class Settings:
     WINDOW_SIZE: tuple[int, int] = (800, 600)
     GAME_SIZE: tuple[int, int] = (600, 600)
     GRID_SIZE: int = 32
-    GAMETICK_INTERVAL_BASE: float = 0.15  # Seconds between each game tick
+    GAMETICK_INTERVAL_BASE: float = 0.10  # Seconds between each game tick
+    GAMETICK_INTERVAL_MIN: float = 0.04  # Minimum seconds between each game tick
+    # Number of bodies before interval min is reached
+    GAMETICK_N_BODIES_TO_INTERVAL_MIN: int = 100
 
 
 class MoveDirection(Enum):
@@ -174,7 +177,7 @@ class GraphicsEngine:
             out_color = vec4(0.5 - 0.3 * abs(sin(f_time * PI * 3)), 0.7, 0.3, 1.0);
         }
         """
-        self.player_head_shader_program = self.ctx.program(
+        self.player_head_shader_program: mgl.Program = self.ctx.program(
             vertex_shader=self.quad_vertex_shader,
             fragment_shader=self.player_fragment_shader,
         )
@@ -186,8 +189,8 @@ class GraphicsEngine:
             1.0 - self.adjust_y / self.grid_size,
             0.0,
         )
-        self.player_m_model_translate = glm.translate(self.grid_00_position)
-        self.player_m_model_scale = glm.scale(
+        self.player_m_model_translate: mat4 = glm.translate(self.grid_00_position)
+        self.player_m_model_scale: mat4 = glm.scale(
             mat4(), vec3(1.0 / self.aspect_ratio, 1.0, 1.0)
         )
         self.player_m_model_scale = glm.scale(
@@ -309,6 +312,8 @@ class GraphicsEngine:
             self.pickup_shader_program, [(self.triangle_vbo, "2f", "in_position")]
         )
 
+        self.gametick_interval = Settings.GAMETICK_INTERVAL_BASE
+
     def get_shader_programs(self) -> list[mgl.Program]:
         return [
             self.board_shader_program,
@@ -402,6 +407,10 @@ class GraphicsEngine:
             self.player_grid_position
         ] + self.tail_positions
 
+        if len(self.player_body_parts) == self.grid_size**2:
+            self.on_death("You win!")
+            return
+
         generated_square: GRID_POSITION = self.player_grid_position
         assert (
             generated_square in blocked_grids
@@ -414,16 +423,23 @@ class GraphicsEngine:
             print(f"{generated_square=}")
         self.pickup_grid_position = generated_square
 
+        N = Settings.GAMETICK_N_BODIES_TO_INTERVAL_MIN
+        kp = int(min(len(self.player_body_parts), N))
+
+        self.gametick_interval = (kp / N) * Settings.GAMETICK_INTERVAL_MIN + (
+            N - kp
+        ) / N * Settings.GAMETICK_INTERVAL_BASE
+
     def update_gamestate(self) -> None:
         """
         Ticks for the actual game logic, invoked by the game loop.
         """
         if len(self.player_body_parts) == 0:
-            self.tail_positions = []
+            self.tail_positions: list[GRID_POSITION] = []
         else:
-            self.tail_positions = self.player_previous_grid_positions[
-                -len(self.player_body_parts) :
-            ]
+            self.tail_positions: list[GRID_POSITION] = (
+                self.player_previous_grid_positions[-len(self.player_body_parts) :]
+            )
 
         self._update_gamestate_moving()
 
@@ -476,8 +492,8 @@ class GraphicsEngine:
         This handles all the rendering logic, the actual gameticks are handled in update_gamestate.
         """
         t_curr = time.perf_counter()
-        if t_curr > self.time_of_last_move + Settings.GAMETICK_INTERVAL_BASE:
-            print(t_curr - self.time_of_last_move)
+        if t_curr > self.time_of_last_move + self.gametick_interval:
+            print(f"{self.gametick_interval=}")
             self.update_gamestate()
 
             self.time_of_last_move = time.perf_counter()
